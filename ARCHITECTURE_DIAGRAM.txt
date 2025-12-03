@@ -1,0 +1,171 @@
+HTTP PACKET SNIFFER - ARCHITECTURE DIAGRAM
+=====================================================
+
+Overview
+--------
+
+                                     ┌─────────────────┐
+                                     │    main.py      │
+                                     │   (Entry Point) │
+                                     └────────┬────────┘
+                                                   │
+                                                   v
+                           ┌─────────────────────────────┐
+                           │     HTTPSnifferGUI (MVC)    │
+                           │     gui/main_window.py      │
+                           │  • GUI queue (Queue(maxsize))
+                           │  • Batch consumer (max_batch)
+                           └───────────┬─────────────────┘
+                                             │
+                                             v
+                           ┌─────────────────────────────┐
+                           │     PacketSniffer (Core)    │
+                           │     core/sniffer.py         │
+                           │  • Parser pipeline (DI)     │
+                           │  • Non-blocking capture     │
+                           │  • enqueue with timeout     │
+                           └───────┬──────────┬──────────┘
+                                       │          │
+                  ┌─────────────┘          └─────────────┐
+                  │                                       │
+                  v                                       v
+    ┌────────────────┐                     ┌────────────────────┐
+    │    Parsers     │                     │   Performance &    │
+    │  (Ethernet/IP/ │                     │   Robustness Utils │
+    │   TCP/HTTP)    │                     │   utils/performance.py
+    │  (SRP, DI)     │                     │  • PacketBuffer     │
+    └────────────────┘                     │  • PerformanceMonitor│
+                  │                             │  • RateLimiter (GUI) │
+                  v                             │  • ErrorHandler      │
+    ┌───────────────┐                      └────────────────────┘
+    │   Models (DTO)│
+    │  (HTTPRequest/ │
+    │   HTTPResponse)│
+    └───────────────┘
+
+         ┌────────────┐    ┌────────────┐    ┌──────────────┐
+         │  Filters   │    │  Config    │    │  Test & CI   │
+         │ (Strategy) │    │ settings   │    │  & Load Test │
+         │ FilterMgr  │    │ config/    │    │  scripts     │
+         └────────────┘    └────────────┘    └──────────────┘
+
+Data flow (simplified)
+----------------------
+1) Capture:
+    NIC -> Kernel -> raw socket.recvfrom() -> PacketSniffer
+
+2) Parse & Detect:
+    PacketSniffer -> parsers (Ethernet -> IPv4 -> TCP -> HTTP)
+
+3) Enqueue:
+    Build DTO (HTTPRequestInfo/HTTPResponseInfo) -> gui_queue.put(block=True, timeout=0.1)
+    - If queue is full and timeout expires, ErrorHandler logs `queue_full` and packet is dropped.
+
+4) GUI Consumption:
+    GUI `_process_queue()` runs every `GUI_UPDATE_INTERVAL_MS` and processes up to `max_batch` items per cycle (batching).
+
+5) Display & Metrics:
+    GUI updates views and counters; sniffer exposes `get_performance_stats()` (PerformanceMonitor + HTTP counters).
+
+Why this design avoids GUI-driven packet loss
+-------------------------------------------
+- Producer-side dropping hides data and skews metrics. Instead, the sniffer now uses a bounded queue and short blocking put to provide backpressure while keeping memory bounded.
+- GUI consumes in batches, reducing per-item overhead and increasing throughput without heavy CPU bursts.
+- `PerformanceMonitor` + `ErrorHandler` provide instrumentation to detect where drops occur (kernel vs application).
+
+Extensibility and next steps
+---------------------------
+- Add a headless capture mode that writes pcap files (recommended for sustained, high-throughput capture).
+- Expose `get_performance_stats()` over a small admin HTTP endpoint for integration with external monitoring (Prometheus/Grafana).
+- Persist performance metrics to disk periodically for long-run analysis.
+
+
+
+DATA FLOW
+=========
+
+1. Packet Capture Flow:
+   Raw Socket → PacketSniffer → EthernetParser → IPv4Parser → TCPParser → HTTPParser
+
+2. Data Processing Flow:
+   HTTPParser → HTTPRequestInfo/HTTPResponseInfo → Queue → GUI
+
+3. Filtering Flow:
+   Packet Data → FilterManager → CompositeFilter → MethodFilter + IPFilter → Display
+
+
+MODULE DEPENDENCIES
+==================
+
+┌─────────┐
+│  main   │
+└────┬────┘
+     │
+     └──→ ┌────────┐
+          │  gui   │
+          └───┬────┘
+              │
+              ├──→ ┌────────┐
+              │    │  core  │
+              │    └───┬────┘
+              │        │
+              │        ├──→ ┌─────────┐
+              │        │    │ parsers │
+              │        │    └─────────┘
+              │        │
+              │        ├──→ ┌────────┐
+              │        │    │ models │
+              │        │    └────────┘
+              │        │
+              │        └──→ ┌────────┐
+              │             │ config │
+              │             └────────┘
+              │
+              └──→ ┌─────────┐
+                   │ filters │
+                   └────┬────┘
+                        │
+                        └──→ ┌────────┐
+                             │ models │
+                             └────────┘
+
+
+CLASS RELATIONSHIPS
+===================
+
+PacketFilter (Abstract)
+    ↑
+    ├── MethodFilter (Strategy)
+    ├── IPFilter (Strategy)
+    └── CompositeFilter (Composite)
+            ↑
+            └── contains List[PacketFilter]
+
+FilterManager
+    └── has-a: PacketFilter
+
+PacketSniffer
+    ├── has-a: EthernetParser
+    ├── has-a: IPv4Parser
+    ├── has-a: TCPParser
+    └── has-a: HTTPParser
+
+HTTPSnifferGUI
+    ├── has-a: PacketSniffer
+    ├── has-a: FilterManager
+    ├── has-a: Queue
+    └── displays: HTTPRequestInfo, HTTPResponseInfo
+
+
+EXTENSION POINTS
+================
+
+Easy to Add:
+  • New Parser → Create parser class, inject into PacketSniffer
+  • New Filter → Extend PacketFilter abstract class
+  • New Protocol → Implement new parser module
+  • New GUI View → Add tab to HTTPSnifferGUI
+  • New Configuration → Add to config/settings.py
+  • New Data Type → Add dataclass to models/
+
+
