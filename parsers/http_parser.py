@@ -95,7 +95,11 @@ class HTTPParser:
     
     @staticmethod
     def _parse_headers_and_body(lines: list) -> Tuple[Dict[str, str], Optional[str]]:
-        """Parse HTTP headers and body from lines."""
+        """Parse HTTP headers and body from lines.
+
+        The returned `body` is truncated to a reasonable length to avoid
+        storing very large payloads in memory or UI buffers.
+        """
         headers = {}
         body_start_idx = None
         
@@ -107,13 +111,12 @@ class HTTPParser:
                 body_start_idx = idx + 1
                 break
         
-        # Extract body if present
         body = None
         if body_start_idx is not None and body_start_idx < len(lines):
             body_lines = lines[body_start_idx:]
             if body_lines:
                 body = '\n'.join(body_lines).strip()
-                if len(body) > 500:  # Truncate large bodies
+                if len(body) > 500:
                     body = body[:500] + '... (truncated)'
         
         return headers, body

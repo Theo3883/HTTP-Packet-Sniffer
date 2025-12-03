@@ -54,7 +54,7 @@ class HTTPRequestInfo:
         print(f"Method:       {self.http_method}")
         print(f"URI:          {self.http_uri}")
         print(f"Version:      {self.http_version}")
-        print(f"\nNetwork Info:")
+        print("\nNetwork Info:")
         print(f"  Source:     {self.src_ip}:{self.src_port} ({self.src_mac})")
         print(f"  Dest:       {self.dest_ip}:{self.dest_port} ({self.dest_mac})")
         print(f"  TCP Seq:    {self.sequence}")
@@ -67,7 +67,7 @@ class HTTPRequestInfo:
                 print(f"  {key}: {value}")
         
         if self.http_body:
-            print(f"\nRequest Body:")
+            print("\nRequest Body:")
             print(f"  {self.http_body}")
         
         print("="*70 + "\n")
@@ -100,7 +100,7 @@ class HTTPResponseInfo:
         print(f"Timestamp:    {self.timestamp.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}")
         print(f"Status:       {self.get_status_line()}")
         print(f"Version:      {self.http_version}")
-        print(f"\nNetwork Info:")
+        print("\nNetwork Info:")
         print(f"  Source:     {self.src_ip}:{self.src_port}")
         print(f"  Dest:       {self.dest_ip}:{self.dest_port}")
         
@@ -110,7 +110,7 @@ class HTTPResponseInfo:
                 print(f"  {key}: {value}")
         
         if self.http_body:
-            print(f"\nResponse Body:")
+            print("\nResponse Body:")
             print(f"  {self.http_body}")
         
         print("="*70 + "\n")

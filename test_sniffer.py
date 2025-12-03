@@ -5,8 +5,8 @@ Test suite for HTTP Packet Sniffer
 import unittest
 from datetime import datetime
 from models import HTTPRequestInfo, HTTPResponseInfo
-from parsers import EthernetParser, IPv4Parser, TCPParser, HTTPParser
-from filters import PacketFilter, MethodFilter, IPFilter, CompositeFilter, FilterManager
+from parsers import EthernetParser, HTTPParser
+from filters import MethodFilter, IPFilter, CompositeFilter, FilterManager
 from utils import PacketBuffer, PerformanceMonitor, RateLimiter, ErrorHandler
 
 
@@ -63,7 +63,6 @@ class TestParsers(unittest.TestCase):
     
     def test_ethernet_parser(self):
         """Test Ethernet frame parsing."""
-        # Create mock Ethernet frame
         import struct
         frame = struct.pack('! 6s 6s H', 
                            b'\xaa\xbb\xcc\xdd\xee\xff',
@@ -187,11 +186,11 @@ class TestFilters(unittest.TestCase):
         manager = FilterManager()
         manager.set_filter(MethodFilter("POST"))
         
-        # When disabled, should match all
+        
         manager.set_enabled(False)
         self.assertTrue(manager.matches(self.request, 'request'))
         
-        # When enabled, should apply filter
+        
         manager.set_enabled(True)
         self.assertFalse(manager.matches(self.request, 'request'))
 
@@ -230,10 +229,10 @@ class TestPerformanceUtilities(unittest.TestCase):
         """Test rate limiter controls rate."""
         limiter = RateLimiter(max_per_second=100)
         
-        # First call should be allowed
+        
         self.assertTrue(limiter.should_allow())
         
-        # Immediate second call should be blocked
+        
         self.assertFalse(limiter.should_allow())
     
     def test_error_handler(self):
@@ -253,8 +252,11 @@ class TestIntegration(unittest.TestCase):
     
     def test_end_to_end_parsing(self):
         """Test complete parsing pipeline."""
-        # This would require more complex setup with actual packet data
-        # For now, test individual components work together
+        """This integration test ensures individual components interoperate.
+
+        Note: an end-to-end live-capture test would require raw packets and
+        elevated privileges; this test focuses on parsing and model behavior.
+        """
         
         parser = HTTPParser()
         request_data = b"GET /api/users HTTP/1.1\r\nHost: example.com\r\n\r\n"
@@ -281,7 +283,7 @@ class TestIntegration(unittest.TestCase):
                 http_body=body
             )
             
-            # Test filtering
+            
             filter_mgr = FilterManager()
             filter_mgr.set_enabled(True)
             filter_mgr.set_filter(MethodFilter("GET"))
@@ -297,22 +299,22 @@ def run_tests():
     print("="*70)
     print()
     
-    # Create test suite
+    
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
     
-    # Add all test classes
+    
     suite.addTests(loader.loadTestsFromTestCase(TestModels))
     suite.addTests(loader.loadTestsFromTestCase(TestParsers))
     suite.addTests(loader.loadTestsFromTestCase(TestFilters))
     suite.addTests(loader.loadTestsFromTestCase(TestPerformanceUtilities))
     suite.addTests(loader.loadTestsFromTestCase(TestIntegration))
     
-    # Run tests
+    
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
     
-    # Summary
+    
     print()
     print("="*70)
     print("TEST SUMMARY")

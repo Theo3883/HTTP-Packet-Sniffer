@@ -28,19 +28,16 @@ class HTTPSnifferGUI:
         self.root.title("HTTP Packet Sniffer")
         self.root.geometry("1400x900")
         
-        # Model components
         self.queue = queue.Queue(maxsize=5000)  # Large queue to buffer bursts
         self.sniffer = None
         self.sniffer_thread = None
         self.filter_manager = FilterManager()
         
-        # Data storage
         self.request_data = {}
         self.response_data = {}
         self.request_count = 0
         self.response_count = 0
         
-        # Filter settings (View state)
         self.filter_method = tk.StringVar(value="All")
         self.filter_src_ip = tk.StringVar(value="")
         self.filter_dest_ip = tk.StringVar(value="")
@@ -88,13 +85,13 @@ class HTTPSnifferGUI:
                                        padx=20, pady=8, relief=tk.RAISED, cursor='hand2')
         self.clear_button.pack(side=tk.LEFT, padx=5, pady=8)
         
-        # Console output button
+        
         self.console_button = tk.Button(control_frame, text="Print to Console", command=self.print_selected_to_console,
                                        bg='#9b59b6', fg='white', font=('Arial', 11, 'bold'),
                                        padx=20, pady=8, relief=tk.RAISED, cursor='hand2')
         self.console_button.pack(side=tk.LEFT, padx=5, pady=8)
         
-        # Stats label
+        
         self.stats_label = tk.Label(control_frame, text="Requests: 0 | Responses: 0 | Total: 0 | Rate: 0/s", 
                                     bg='#ecf0f1', font=('Arial', 10, 'bold'))
         self.stats_label.pack(side=tk.RIGHT, padx=10)
@@ -148,13 +145,13 @@ class HTTPSnifferGUI:
         notebook = ttk.Notebook(self.root)
         notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        # Requests tab
+        
         self._create_requests_tab(notebook)
         
-        # Responses tab
+        
         self._create_responses_tab(notebook)
         
-        # Logs tab
+        
         self._create_logs_tab(notebook)
     
     def _create_requests_tab(self, notebook):
@@ -251,7 +248,7 @@ class HTTPSnifferGUI:
                                      bg='#34495e', fg='white', font=('Arial', 9))
         self.status_label.pack(side=tk.LEFT, padx=10)
     
-    # Controller methods
+    
     
     def start_capture(self):
         """Start packet capture."""
@@ -294,14 +291,14 @@ class HTTPSnifferGUI:
         self.filter_manager.set_enabled(self.filter_enabled.get())
         
         if self.filter_enabled.get():
-            # Create composite filter
+            
             composite = CompositeFilter()
             composite.add_filter(MethodFilter(self.filter_method.get()))
             composite.add_filter(IPFilter(self.filter_src_ip.get(), self.filter_dest_ip.get()))
             
             self.filter_manager.set_filter(composite)
             
-            # Update status
+            
             method = self.filter_method.get()
             src_ip = self.filter_src_ip.get().strip()
             dest_ip = self.filter_dest_ip.get().strip()
@@ -378,14 +375,14 @@ class HTTPSnifferGUI:
         """Update statistics display with performance metrics."""
         total = self.request_count + self.response_count
         
-        # Get performance stats if sniffer is running
+        
         rate_str = "0/s"
         if self.sniffer:
             try:
                 stats = self.sniffer.get_performance_stats()
                 rate = stats.get('packets_per_second', 0)
                 rate_str = f"{rate:.1f}/s"
-            except:
+            except Exception:
                 pass
         
         self.stats_label.config(
@@ -415,40 +412,40 @@ class HTTPSnifferGUI:
         
         details = f"HTTP Request Details\n{'='*60}\n\n"
         
-        # Request Line
-        details += f"Request Line:\n"
+        
+        details += "Request Line:\n"
         details += f"  {packet_info.http_method} {packet_info.http_uri} {packet_info.http_version}\n\n"
         
-        # Timestamp and Network Info
+        
         details += f"Timestamp: {packet_info.timestamp.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}\n\n"
         
-        details += f"Network Information:\n"
+        details += "Network Information:\n"
         details += f"  Source MAC:        {packet_info.src_mac}\n"
         details += f"  Destination MAC:   {packet_info.dest_mac}\n"
         details += f"  Source IP:Port:    {packet_info.src_ip}:{packet_info.src_port}\n"
         details += f"  Destination IP:Port: {packet_info.dest_ip}:{packet_info.dest_port}\n\n"
         
-        # TCP Metadata
-        details += f"TCP Metadata:\n"
+        
+        details += "TCP Metadata:\n"
         details += f"  Sequence Number:   {packet_info.sequence}\n"
         details += f"  Acknowledgment:    {packet_info.acknowledgment}\n"
         details += f"  Flags:             {packet_info.get_tcp_flags()}\n\n"
         
-        # HTTP Headers
+        
         if packet_info.http_headers:
             details += f"HTTP Headers: ({len(packet_info.http_headers)} headers)\n"
             for key, value in sorted(packet_info.http_headers.items()):
                 details += f"  {key}: {value}\n"
             details += "\n"
         
-        # Request Body/Payload
+        
         if packet_info.http_body:
-            details += f"Request Body/Payload:\n"
+            details += "Request Body/Payload:\n"
             details += f"{'-'*60}\n"
             details += f"{packet_info.http_body}\n"
             details += f"{'-'*60}\n"
         else:
-            details += f"Request Body: (empty)\n"
+            details += "Request Body: (empty)\n"
         
         self.request_detail.insert('1.0', details)
     
@@ -458,38 +455,38 @@ class HTTPSnifferGUI:
         
         details = f"HTTP Response Details\n{'='*60}\n\n"
         
-        # Status Line
-        details += f"Status Line:\n"
+        
+        details += "Status Line:\n"
         details += f"  {packet_info.http_version} {packet_info.get_status_line()}\n\n"
         
-        # Timestamp and Network Info
+        
         details += f"Timestamp: {packet_info.timestamp.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}\n\n"
         
-        details += f"Network Information:\n"
+        details += "Network Information:\n"
         details += f"  Source IP:Port:    {packet_info.src_ip}:{packet_info.src_port}\n"
         details += f"  Destination IP:Port: {packet_info.dest_ip}:{packet_info.dest_port}\n\n"
         
-        # HTTP Headers
+        
         if packet_info.http_headers:
             details += f"HTTP Headers: ({len(packet_info.http_headers)} headers)\n"
             for key, value in sorted(packet_info.http_headers.items()):
                 details += f"  {key}: {value}\n"
             details += "\n"
         
-        # Response Body
+        
         if packet_info.http_body:
-            details += f"Response Body:\n"
+            details += "Response Body:\n"
             details += f"{'-'*60}\n"
             details += f"{packet_info.http_body}\n"
             details += f"{'-'*60}\n"
         else:
-            details += f"Response Body: (empty or not captured)\n"
+            details += "Response Body: (empty or not captured)\n"
         
         self.response_detail.insert('1.0', details)
     
     def print_selected_to_console(self):
         """Print selected packet details to console."""
-        # Check if request is selected
+        
         request_selection = self.request_tree.selection()
         if request_selection:
             item = request_selection[0]
@@ -499,7 +496,7 @@ class HTTPSnifferGUI:
                 self.log_message("[*] Request details printed to console")
                 return
         
-        # Check if response is selected
+        
         response_selection = self.response_tree.selection()
         if response_selection:
             item = response_selection[0]
@@ -509,7 +506,7 @@ class HTTPSnifferGUI:
                 self.log_message("[*] Response details printed to console")
                 return
         
-        # Nothing selected
+        
         self.log_message("[!] No packet selected. Please select a request or response first.")
     
     def _process_queue(self):

@@ -39,17 +39,21 @@ class MethodFilter(PacketFilter):
         self.method = method
     
     def matches(self, packet_info, packet_type: str = 'request') -> bool:
-        """Check if packet matches method filter."""
+        """Check if packet matches method filter.
+
+        The method filter only applies to requests; non-request packets
+        are always allowed through. `packet_info` may be either a
+        `HTTPRequestInfo` instance or a dict (backwards compatibility).
+        """
         if packet_type != 'request':
-            return True  # Method filter only applies to requests
+            return True
         
         if self.method == "All":
             return True
         
         if isinstance(packet_info, HTTPRequestInfo):
             return packet_info.http_method == self.method
-        
-        # Handle dict for backward compatibility
+
         if isinstance(packet_info, dict):
             return packet_info.get('http_method') == self.method
         
@@ -71,12 +75,16 @@ class IPFilter(PacketFilter):
         self.dest_ip = dest_ip.strip()
     
     def matches(self, packet_info, packet_type: str = 'request') -> bool:
-        """Check if packet matches IP filter."""
+        """Check if packet matches IP filter.
+
+        Accepts `HTTPRequestInfo`, `HTTPResponseInfo`, or dict-like packet
+        information. If a src/dest filter is not set it does not restrict
+        matching for that field.
+        """
         if isinstance(packet_info, (HTTPRequestInfo, HTTPResponseInfo)):
             src_match = not self.src_ip or self.src_ip in packet_info.src_ip
             dest_match = not self.dest_ip or self.dest_ip in packet_info.dest_ip
         elif isinstance(packet_info, dict):
-            # Handle dict for backward compatibility
             src_match = not self.src_ip or self.src_ip in packet_info.get('src_ip', '')
             dest_match = not self.dest_ip or self.dest_ip in packet_info.get('dest_ip', '')
         else:
