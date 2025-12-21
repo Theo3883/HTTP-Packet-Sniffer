@@ -1,6 +1,3 @@
-# Requirements for HTTP Packet Sniffer
-# All required Python modules are from the standard library.
-# No additional pip packages required.
-#
-# Note: The GUI uses tkinter, which is a system package on many Linux distributions
-# (install via the system package manager; see README.md).
+# Phase 1: Raw Packet Capture
+# All required modules are from Python standard library
+# No external dependencies required
