@@ -1,20 +1,23 @@
 """Packet sniffer core module.
 
 Provides the PacketSniffer class which captures raw packets and identifies
-HTTP traffic. Phase 2 implementation focuses on HTTP packet identification.
+HTTP traffic. Phase 3 implementation adds real-time display of HTTP requests
+with structured formatting.
 
 Key responsibilities:
 - Initialize raw socket for packet capture
 - Parse Ethernet / IPv4 / TCP layers
 - Identify HTTP requests by port and method
-- Display HTTP requests in real-time
+- Display HTTP requests in real-time with detailed information
 """
 
 import socket
 import sys
+from datetime import datetime
 
 from parsers import EthernetParser, IPv4Parser, TCPParser, HTTPParser
 from config import SnifferConfig
+from models import HTTPRequestInfo
 
 
 class PacketSniffer:
@@ -127,7 +130,9 @@ class PacketSniffer:
                             
                             if self._is_http_port(src_port, dest_port) and len(payload) > 0:
                                 self._process_http_payload(
-                                    payload, src_ip, dest_ip, src_port, dest_port
+                                    payload, src_mac, dest_mac, src_ip, dest_ip,
+                                    src_port, dest_port, sequence, acknowledgment,
+                                    flag_urg, flag_ack, flag_psh, flag_rst, flag_syn, flag_fin
                                 )
                 except Exception as e:
                     continue
@@ -148,17 +153,51 @@ class PacketSniffer:
     def _process_http_payload(
         self,
         payload: bytes,
+        src_mac: str,
+        dest_mac: str,
         src_ip: str,
         dest_ip: str,
         src_port: int,
-        dest_port: int
+        dest_port: int,
+        sequence: int,
+        acknowledgment: int,
+        flag_urg: int,
+        flag_ack: int,
+        flag_psh: int,
+        flag_rst: int,
+        flag_syn: int,
+        flag_fin: int
     ) -> None:
         """Process HTTP payload and check for requests.
 
         This method uses the http_parser to determine whether the
-        TCP payload contains an HTTP request and displays it.
+        TCP payload contains an HTTP request and creates an HTTPRequestInfo
+        object to display the full details.
         """
-        is_request, method, uri, version = self.http_parser.is_http_request(payload)
+        is_request, method, uri, version, headers, body = self.http_parser.is_http_request(payload)
         if is_request:
             self.http_request_count += 1
-            self.log(f"[HTTP #{self.http_request_count}] {method} {uri} | {src_ip}:{src_port} -> {dest_ip}:{dest_port}")
+            
+            request_info = HTTPRequestInfo(
+                timestamp=datetime.now(),
+                src_mac=src_mac,
+                dest_mac=dest_mac,
+                src_ip=src_ip,
+                dest_ip=dest_ip,
+                src_port=src_port,
+                dest_port=dest_port,
+                sequence=sequence,
+                acknowledgment=acknowledgment,
+                flag_urg=flag_urg,
+                flag_ack=flag_ack,
+                flag_psh=flag_psh,
+                flag_rst=flag_rst,
+                flag_syn=flag_syn,
+                flag_fin=flag_fin,
+                http_method=method,
+                http_uri=uri,
+                http_version=version,
+                http_headers=headers,
+                http_body=body
+            )
+            request_info.print_console_details()
