@@ -1,23 +1,25 @@
 """Packet sniffer core module.
 
 Provides the PacketSniffer class which captures raw packets and identifies
-HTTP traffic. Phase 3 implementation adds real-time display of HTTP requests
-with structured formatting.
+HTTP traffic. Phase 4 implementation adds request filtering by method and IP.
 
 Key responsibilities:
 - Initialize raw socket for packet capture
 - Parse Ethernet / IPv4 / TCP layers
 - Identify HTTP requests by port and method
+- Filter requests based on method and IP addresses
 - Display HTTP requests in real-time with detailed information
 """
 
 import socket
 import sys
 from datetime import datetime
+from typing import Optional
 
 from parsers import EthernetParser, IPv4Parser, TCPParser, HTTPParser
 from config import SnifferConfig
 from models import HTTPRequestInfo
+from filters import FilterManager
 
 
 class PacketSniffer:
@@ -38,7 +40,8 @@ class PacketSniffer:
         ethernet_parser: EthernetParser = None,
         ipv4_parser: IPv4Parser = None,
         tcp_parser: TCPParser = None,
-        http_parser: HTTPParser = None
+        http_parser: HTTPParser = None,
+        filter_manager: Optional[FilterManager] = None
     ):
         """Initialize the packet sniffer with optional parser dependencies.
 
@@ -47,6 +50,7 @@ class PacketSniffer:
             ipv4_parser: Parser for IPv4 headers.
             tcp_parser: Parser for TCP headers.
             http_parser: Parser for HTTP messages.
+            filter_manager: Manager for packet filtering.
         """
         self.running = False
         
@@ -54,8 +58,10 @@ class PacketSniffer:
         self.ipv4_parser = ipv4_parser or IPv4Parser()
         self.tcp_parser = tcp_parser or TCPParser()
         self.http_parser = http_parser or HTTPParser()
+        self.filter_manager = filter_manager or FilterManager()
 
         self.http_request_count = 0
+        self.filtered_request_count = 0
 
         self._init_socket()
     
@@ -140,6 +146,8 @@ class PacketSniffer:
         except KeyboardInterrupt:
             self.log("\n[+] Capture stopped")
             self.log(f"Total packets: {packet_count}, TCP: {tcp_count}, HTTP: {self.http_request_count}")
+            if self.filter_manager.is_enabled():
+                self.log(f"Filtered (displayed): {self.filtered_request_count}")
             self.socket.close()
         except Exception as e:
             self.log(f"\n[-] Error during packet capture: {e}")
@@ -200,4 +208,8 @@ class PacketSniffer:
                 http_headers=headers,
                 http_body=body
             )
-            request_info.print_console_details()
+            
+            # Apply filters before displaying
+            if self.filter_manager.matches(request_info, 'request'):
+                self.filtered_request_count += 1
+                request_info.print_console_details()

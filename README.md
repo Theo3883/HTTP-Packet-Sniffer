@@ -1,29 +1,34 @@
-# HTTP Packet Sniffer - Phase 2
+# HTTP Packet Sniffer - Phase 4
 
-## Phase 2: HTTP Packet Identification
+## Phase 4: Request Filtering
 
-Filter captured packets to identify HTTP traffic using proper OOP structure.
+Implement filters for captured HTTP requests, allowing users to view only requests matching selected filters.
 
 ### Features
-- Decode packet headers using struct/ctypes
-- Parse Ethernet, IP, and TCP headers
-- Identify HTTP requests by port and method
-- Separate HTTP requests from other traffic
-- Display only HTTP request packets in real-time
+- Real-time HTTP packet capture and parsing
+- **Filter by HTTP method type** (GET, POST, DELETE, etc.)
+- **Filter by source IP address**
+- **Filter by destination IP address**
+- Structured display with timestamp, headers, and request details
+- Interactive console-based filter configuration
 
 ### Project Structure
 ```
 .
-├── main.py              # Entry point
+├── main.py              # Entry point with filter configuration
 ├── config/              # Configuration settings
 │   └── settings.py      # SnifferConfig class
 ├── core/                # Core packet capture
-│   └── sniffer.py       # PacketSniffer class
-└── parsers/             # Protocol parsers
-    ├── ethernet_parser.py  # EthernetParser class
-    ├── ip_parser.py        # IPv4Parser class
-    ├── tcp_parser.py       # TCPParser class
-    └── http_parser.py      # HTTPParser class
+│   └── sniffer.py       # PacketSniffer class with filter support
+├── parsers/             # Protocol parsers
+│   ├── ethernet_parser.py  # EthernetParser class
+│   ├── ip_parser.py        # IPv4Parser class
+│   ├── tcp_parser.py       # TCPParser class
+│   └── http_parser.py      # HTTPParser class (with headers/body parsing)
+├── models/              # Data models
+│   └── packet_info.py   # HTTPRequestInfo dataclass
+└── filters/             # Filtering system
+    └── packet_filter.py # PacketFilter, MethodFilter, IPFilter, FilterManager
 ```
 
 ### Requirements
@@ -39,32 +44,103 @@ Run with sudo to grant raw socket privileges:
 sudo python3 main.py
 ```
 
+### Filter Configuration
+
+When starting the application, you'll be prompted to configure filters:
+
+```
+Enable filtering? (y/n) [n]: y
+
+[1] Method Filter
+Available methods: GET, POST, PUT, DELETE, HEAD, OPTIONS, PATCH, TRACE, CONNECT
+Filter by HTTP method (leave empty for all): GET
+
+[2] IP Address Filter
+Filter by source IP (leave empty for all): 
+Filter by destination IP (leave empty for all): 192.168.1
+```
+
+**Filter Examples:**
+
+1. **Show only GET requests:**
+   - Enable filtering: `y`
+   - Method: `GET`
+   - Source IP: (empty)
+   - Dest IP: (empty)
+
+2. **Show POST requests to specific server:**
+   - Enable filtering: `y`
+   - Method: `POST`
+   - Source IP: (empty)
+   - Dest IP: `10.0.0.5`
+
+3. **Show all requests from specific client:**
+   - Enable filtering: `y`
+   - Method: (empty)
+   - Source IP: `192.168.1.100`
+   - Dest IP: (empty)
+
+4. **No filtering (show all):**
+   - Enable filtering: `n`
+
 ### Output
 
-Functional Output: Only HTTP request packets are displayed and processed.
+Functional Output: Users can view real-time HTTP requests with detailed information, filtered by method and IP addresses.
 
-Example:
+Example output with filtering enabled:
+
 ```
-[HTTP #1] GET / | 192.168.1.100:54321 -> 93.184.216.34:80
-[HTTP #2] POST /api/users | 192.168.1.100:54322 -> 10.0.0.5:8080
-[HTTP #3] GET /index.html | 192.168.1.100:54323 -> 93.184.216.34:80
+======================================================================
+HTTP REQUEST DETAILS
+======================================================================
+Timestamp:    2025-12-22 14:30:45.123
+Method:       GET
+URI:          /api/data
+Version:      HTTP/1.1
+
+Network Info:
+  Source:     192.168.1.100:54321 (aa:bb:cc:dd:ee:ff)
+  Dest:       93.184.216.34:80 (11:22:33:44:55:66)
+  TCP Seq:    1234567890
+  TCP Ack:    987654321
+  TCP Flags:  ACK, PSH
+
+HTTP Headers: (4 headers)
+  Host: example.com
+  User-Agent: Mozilla/5.0
+  Accept: application/json
+  Connection: keep-alive
+======================================================================
 ```
 
 ### Technical Details
 
-**OOP Design:**
-- `PacketSniffer`: Main orchestrator class
-- `EthernetParser`, `IPv4Parser`, `TCPParser`: Protocol parsers using dependency injection
-- `HTTPParser`: HTTP request identification
-- `SnifferConfig`: Centralized configuration
+**OOP Design Patterns:**
+- **Strategy Pattern**: `PacketFilter` abstract base with concrete filters
+- **Composite Pattern**: `CompositeFilter` combines multiple filters
+- **Dependency Injection**: Parsers and filters injected into `PacketSniffer`
+
+**Filter Architecture:**
+- `PacketFilter`: Abstract base class
+- `MethodFilter`: Filter by HTTP method
+- `IPFilter`: Filter by source/destination IP (supports partial matching)
+- `CompositeFilter`: Combines multiple filters with AND logic
+- `FilterManager`: Manages filter enable/disable state
 
 **Packet Processing Pipeline:**
 1. Raw socket capture (AF_PACKET)
-2. Ethernet frame parsing
-3. IP header decoding
-4. TCP header parsing
-5. HTTP port filtering (80, 8080, 8000, 8888, 3000, 5000)
-6. HTTP method detection (GET, POST, PUT, DELETE, HEAD, OPTIONS, PATCH, TRACE, CONNECT)
+2. Protocol parsing (Ethernet → IP → TCP → HTTP)
+3. HTTP request identification with headers and body
+4. **Filter evaluation** (method and IP checks)
+5. Display only matching requests
+
+### Statistics
+
+When stopped (Ctrl+C), the sniffer displays:
+- Total packets captured
+- TCP packets
+- HTTP requests identified
+- **Filtered requests displayed** (when filtering enabled)
 
 ### Next Phase
-- Phase 3: Full HTTP Data Extraction (Parse complete headers and body)
+- Phase 5: GUI Implementation with Tkinter
