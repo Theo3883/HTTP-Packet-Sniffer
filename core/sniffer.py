@@ -62,6 +62,7 @@ class PacketSniffer:
 
         self.http_request_count = 0
         self.filtered_request_count = 0
+        self.captured_requests = []  # Phase 5: Store all captured requests for inspection
 
         self._init_socket()
     
@@ -148,6 +149,7 @@ class PacketSniffer:
             self.log(f"Total packets: {packet_count}, TCP: {tcp_count}, HTTP: {self.http_request_count}")
             if self.filter_manager.is_enabled():
                 self.log(f"Filtered (displayed): {self.filtered_request_count}")
+            self.log(f"Captured requests available for inspection: {len(self.captured_requests)}")
             self.socket.close()
         except Exception as e:
             self.log(f"\n[-] Error during packet capture: {e}")
@@ -208,6 +210,9 @@ class PacketSniffer:
                 http_headers=headers,
                 http_body=body
             )
+            
+            # Phase 5: Store request for later inspection
+            self.captured_requests.append(request_info)
             
             # Apply filters before displaying
             if self.filter_manager.matches(request_info, 'request'):
