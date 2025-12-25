@@ -20,6 +20,7 @@ from parsers import EthernetParser, IPv4Parser, TCPParser, HTTPParser
 from config import SnifferConfig
 from models import HTTPRequestInfo
 from filters import FilterManager
+from utils import PerformanceMonitor, ErrorHandler
 
 
 class PacketSniffer:
@@ -63,6 +64,10 @@ class PacketSniffer:
         self.http_request_count = 0
         self.filtered_request_count = 0
         self.captured_requests = []  # Phase 5: Store all captured requests for inspection
+        
+        # Phase 6: Performance monitoring and error handling
+        self.performance_monitor = PerformanceMonitor()
+        self.error_handler = ErrorHandler()
 
         self._init_socket()
     
@@ -123,6 +128,7 @@ class PacketSniffer:
                 try:
                     raw_data, addr = self.socket.recvfrom(SnifferConfig.SOCKET_BUFFER_SIZE)
                     packet_count += 1
+                    self.performance_monitor.increment_packets()  # Phase 6: Track performance
                     
                     dest_mac, src_mac, eth_proto, data = self.ethernet_parser.parse(raw_data)
 
@@ -142,6 +148,9 @@ class PacketSniffer:
                                     flag_urg, flag_ack, flag_psh, flag_rst, flag_syn, flag_fin
                                 )
                 except Exception as e:
+                    # Phase 6: Log error and continue (robustness)
+                    self.performance_monitor.increment_errors()
+                    self.error_handler.log_error('packet_processing', str(e), {'packet_count': packet_count})
                     continue
         
         except KeyboardInterrupt:
@@ -150,6 +159,15 @@ class PacketSniffer:
             if self.filter_manager.is_enabled():
                 self.log(f"Filtered (displayed): {self.filtered_request_count}")
             self.log(f"Captured requests available for inspection: {len(self.captured_requests)}")
+            
+            # Phase 6: Display performance statistics
+            stats = self.performance_monitor.get_stats()
+            self.log(f"\n[*] Performance Statistics:")
+            self.log(f"    Packets/second: {stats['packets_per_second']:.2f}")
+            self.log(f"    Total errors: {stats['total_errors']}")
+            self.log(f"    Error rate: {stats['error_rate']:.4f}")
+            self.log(f"    Elapsed time: {stats['elapsed_time']:.2f}s")
+            
             self.socket.close()
         except Exception as e:
             self.log(f"\n[-] Error during packet capture: {e}")
@@ -218,3 +236,22 @@ class PacketSniffer:
             if self.filter_manager.matches(request_info, 'request'):
                 self.filtered_request_count += 1
                 request_info.print_console_details()
+    
+    def get_performance_stats(self) -> dict:
+        """Get current performance statistics.
+        
+        Returns:
+            dict: Performance statistics including packets/sec, errors, etc.
+        """
+        return self.performance_monitor.get_stats()
+    
+    def get_recent_errors(self, count: int = 10) -> list:
+        """Get recent errors from error handler.
+        
+        Args:
+            count: Number of recent errors to retrieve
+            
+        Returns:
+            list: Recent error entries
+        """
+        return self.error_handler.get_recent_errors(count)
