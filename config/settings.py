@@ -20,6 +20,8 @@ class SnifferConfig:
     IP_PROTOCOL_TCP: int = 6
 
     SOCKET_BUFFER_SIZE: int = 65565
+    GUI_UPDATE_INTERVAL_MS: int = 100  # GUI queue processing interval
+    MAX_URL_DISPLAY_LENGTH: int = 100  # Maximum URL length in tree view
     
     @classmethod
     def get_http_ports_display(cls) -> str:

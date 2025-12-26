@@ -15,6 +15,7 @@ import socket
 import sys
 from datetime import datetime
 from typing import Optional
+from queue import Queue
 
 from parsers import EthernetParser, IPv4Parser, TCPParser, HTTPParser
 from config import SnifferConfig
@@ -42,7 +43,8 @@ class PacketSniffer:
         ipv4_parser: IPv4Parser = None,
         tcp_parser: TCPParser = None,
         http_parser: HTTPParser = None,
-        filter_manager: Optional[FilterManager] = None
+        filter_manager: Optional[FilterManager] = None,
+        gui_queue: Optional[Queue] = None
     ):
         """Initialize the packet sniffer with optional parser dependencies.
 
@@ -52,6 +54,7 @@ class PacketSniffer:
             tcp_parser: Parser for TCP headers.
             http_parser: Parser for HTTP messages.
             filter_manager: Manager for packet filtering.
+            gui_queue: Optional queue for sending data to GUI.
         """
         self.running = False
         
@@ -60,6 +63,7 @@ class PacketSniffer:
         self.tcp_parser = tcp_parser or TCPParser()
         self.http_parser = http_parser or HTTPParser()
         self.filter_manager = filter_manager or FilterManager()
+        self.gui_queue = gui_queue  # Phase 7: GUI support
 
         self.http_request_count = 0
         self.filtered_request_count = 0
@@ -91,12 +95,17 @@ class PacketSniffer:
     
     def log(self, message: str) -> None:
         """
-        Send log message to console.
+        Send log message to console and GUI if present.
         
         Args:
             message: Log message to print
         """
         print(message)
+        if self.gui_queue:
+            try:
+                self.gui_queue.put(('log', message), block=False)
+            except:
+                pass  # Queue full, skip GUI logging
     
     def stop(self) -> None:
         """Stop the packet capture."""
@@ -231,6 +240,13 @@ class PacketSniffer:
             
             # Phase 5: Store request for later inspection
             self.captured_requests.append(request_info)
+            
+            # Phase 7: Send to GUI if queue present
+            if self.gui_queue:
+                try:
+                    self.gui_queue.put(('request', request_info), block=True, timeout=0.1)
+                except:
+                    pass  # Queue full or timeout, continue
             
             # Apply filters before displaying
             if self.filter_manager.matches(request_info, 'request'):
