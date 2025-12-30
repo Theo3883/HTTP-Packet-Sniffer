@@ -103,7 +103,7 @@ class PerformanceMonitor:
 
 class RateLimiter:
     """
-    Rate limiter to prevent GUI overload.
+    Rate limiter to prevent console overload.
     """
     
     def __init__(self, max_per_second: int = 100):

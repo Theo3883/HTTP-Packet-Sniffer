@@ -1,27 +1,28 @@
 #!/usr/bin/env python3
 """
-HTTP Packet Sniffer
-
-Project Structure:
-- models/: Data structures (HTTPRequestInfo, HTTPResponseInfo)
-- parsers/: Protocol parsers (Ethernet, IP, TCP, HTTP)
-- core/: Packet sniffing logic (PacketSniffer)
-- filters/: Packet filtering (Strategy pattern)
-- gui/: User interface (MVC pattern)
-- config/: Configuration settings
+Main entry point for the HTTP packet sniffer GUI application.
 """
 
 from gui import HTTPSnifferGUI
 
 
 def main():
-    """Main entry point for the HTTP packet sniffer application."""
+    """Main entry point for the HTTP packet sniffer GUI application."""
     print("=" * 80)
-    print(" HTTP PACKET SNIFFER")
+    print(" HTTP PACKET SNIFFER - GUI VERSION")
     print("=" * 80)
-    print("\nStarting GUI application...")
-    print("Features: Real-time capture, filtering by method and IP addresses")
-    print("Note: Python3 has been granted raw socket capabilities.\n")
+    print("\nFeatures:")
+    print("  • Real-time HTTP packet capture with GUI")
+    print("  • Filter by HTTP method (GET, POST, DELETE, etc.)")
+    print("  • Filter by source or destination IP addresses")
+    print("  • Tree view of captured requests")
+    print("  • Detailed request inspection panel")
+    print("  • Performance monitoring")
+    print("  • Log viewer")
+    print("\nNote: Requires root/sudo privileges.")
+    print("\nStarting GUI...")
+    print("=" * 80)
+    print()
     
     app = HTTPSnifferGUI()
     app.run()
@@ -29,4 +30,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -157,15 +157,4 @@ HTTPSnifferGUI
     └── displays: HTTPRequestInfo, HTTPResponseInfo
 
 
-EXTENSION POINTS
-================
-
-Easy to Add:
-  • New Parser → Create parser class, inject into PacketSniffer
-  • New Filter → Extend PacketFilter abstract class
-  • New Protocol → Implement new parser module
-  • New GUI View → Add tab to HTTPSnifferGUI
-  • New Configuration → Add to config/settings.py
-  • New Data Type → Add dataclass to models/
-
 
