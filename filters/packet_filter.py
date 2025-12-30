@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import List
 
-from models import HTTPRequestInfo
+from models import HTTPRequestInfo, HTTPResponseInfo
 
 
 class PacketFilter(ABC):
@@ -17,7 +17,7 @@ class PacketFilter(ABC):
         Check if packet matches filter criteria.
         
         Args:
-            packet_info: HTTPRequestInfo instance
+            packet_info: HTTPRequestInfo or HTTPResponseInfo
             packet_type: 'request' or 'response'
             
         Returns:
@@ -77,11 +77,11 @@ class IPFilter(PacketFilter):
     def matches(self, packet_info, packet_type: str = 'request') -> bool:
         """Check if packet matches IP filter.
 
-        Accepts `HTTPRequestInfo` or dict-like packet information.
-        If a src/dest filter is not set it does not restrict
+        Accepts `HTTPRequestInfo`, `HTTPResponseInfo`, or dict-like packet
+        information. If a src/dest filter is not set it does not restrict
         matching for that field.
         """
-        if isinstance(packet_info, HTTPRequestInfo):
+        if isinstance(packet_info, (HTTPRequestInfo, HTTPResponseInfo)):
             src_match = not self.src_ip or self.src_ip in packet_info.src_ip
             dest_match = not self.dest_ip or self.dest_ip in packet_info.dest_ip
         elif isinstance(packet_info, dict):

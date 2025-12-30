@@ -46,6 +46,54 @@ class HTTPParser:
             return False, None, None, None, None, None
     
     @staticmethod
+    def is_http_response(payload: bytes) -> Tuple[bool, Optional[str], Optional[str], Optional[str], Optional[Dict[str, str]], Optional[str]]:
+        """
+        Identify if payload contains HTTP response.
+        
+        Args:
+            payload: TCP payload data
+            
+        Returns:
+            Tuple of (is_response, version, status_code, status_text, headers, body)
+        """
+        if not payload or len(payload) < 10:
+            return False, None, None, None, None, None
+        
+        try:
+            payload_str = payload.decode('ascii', errors='ignore')
+            payload_str = payload_str.replace('\x00', '')
+            lines = payload_str.split('\r\n') if '\r\n' in payload_str else payload_str.split('\n')
+            
+            if not lines:
+                return False, None, None, None, None, None
+            
+            first_line = lines[0].strip()
+            
+            if first_line.startswith('HTTP/'):
+                parts = first_line.split(' ', 2)
+                if len(parts) >= 2:
+                    headers, body = HTTPParser._parse_headers_and_body(lines[1:])
+                    status_code = parts[1] if len(parts) > 1 else '200'
+                    status_text = parts[2] if len(parts) > 2 else 'OK'
+                    return True, parts[0], status_code, status_text, headers, body
+            
+            return False, None, None, None, None, None
+        except Exception:
+            return False, None, None, None, None, None
+    
+    @staticmethod
+    def _parse_headers(lines: list) -> Dict[str, str]:
+        """Parse HTTP headers from lines."""
+        headers = {}
+        for line in lines:
+            if ':' in line and line.strip():
+                key, value = line.split(':', 1)
+                headers[key.strip()] = value.strip()
+            elif line.strip() == '':
+                break
+        return headers
+    
+    @staticmethod
     def _parse_headers_and_body(lines: list) -> Tuple[Dict[str, str], Optional[str]]:
         """Parse HTTP headers and body from lines.
 

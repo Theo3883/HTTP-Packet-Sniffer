@@ -1,15 +1,5 @@
-"""Performance and robustness utilities."""
+"""Utils package for performance and robustness."""
 
-from .performance import (
-    PacketBuffer,
-    PerformanceMonitor,
-    RateLimiter,
-    ErrorHandler
-)
+from .performance import PacketBuffer, PerformanceMonitor, RateLimiter, ErrorHandler
 
-__all__ = [
-    'PacketBuffer',
-    'PerformanceMonitor',
-    'RateLimiter',
-    'ErrorHandler'
-]
+__all__ = ['PacketBuffer', 'PerformanceMonitor', 'RateLimiter', 'ErrorHandler']

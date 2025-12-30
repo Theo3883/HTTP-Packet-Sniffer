@@ -1,5 +1,5 @@
-"""Models package for packet information."""
+"""Models package for packet data structures."""
 
-from .packet_info import HTTPRequestInfo
+from .packet_info import HTTPRequestInfo, HTTPResponseInfo
 
-__all__ = ['HTTPRequestInfo']
+__all__ = ['HTTPRequestInfo', 'HTTPResponseInfo']

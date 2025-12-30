@@ -1,12 +1,14 @@
 #!/bin/bash
-echo "======================================================================"
-echo "HTTP PACKET SNIFFER - QUICK LOAD TEST"
-echo "======================================================================"
-echo "This script will generate 100 HTTP requests quickly."
+# Quick load test with 200 requests for performance validation
 
-# Configuration
-TOTAL_REQUESTS=100
-CONCURRENT_JOBS=5
+echo "======================================================================"
+echo "QUICK LOAD TEST - 200 Requests"
+echo "======================================================================"
+echo "This will generate 200 HTTP requests to validate capture performance."
+echo ""
+
+TOTAL_REQUESTS=200
+CONCURRENT_JOBS=10
 TARGET_URL="http://example.com"
 
 echo "Configuration:"
@@ -15,56 +17,86 @@ echo "  Concurrent Jobs: $CONCURRENT_JOBS"
 echo "  Target URL: $TARGET_URL"
 echo ""
 
-# Counter
-counter=0
+# Counter file
+COUNTER_FILE="/tmp/sniffer_quick_test_counter.txt"
+echo "0" > "$COUNTER_FILE"
 
-echo "Generating HTTP requests..."
+# Function to make HTTP request and update counter
+make_request() {
+    local id=$1
+    local url=$2
+    
+    # Alternate between different request types
+    if [ $((id % 4)) -eq 0 ]; then
+        curl -s -o /dev/null "$url" 2>/dev/null
+    elif [ $((id % 4)) -eq 1 ]; then
+        curl -s -o /dev/null -H "X-Test-ID: $id" "$url" 2>/dev/null
+    elif [ $((id % 4)) -eq 2 ]; then
+        curl -s -I -o /dev/null "$url" 2>/dev/null
+    else
+        curl -s -o /dev/null "${url}?test=$id" 2>/dev/null
+    fi
+    
+    # Update counter atomically
+    lockfile="${COUNTER_FILE}.lock"
+    (
+        flock -x 200
+        local count=$(cat "$COUNTER_FILE" 2>/dev/null || echo "0")
+        echo $((count + 1)) > "$COUNTER_FILE"
+    ) 200>"$lockfile"
+}
 
-# Start time
+export -f make_request
+export COUNTER_FILE
+
+echo "Starting quick load test..."
 start_time=$(date +%s)
 
-# Make requests with variety
-for i in $(seq 1 $TOTAL_REQUESTS); do
-    {
-        if [ $((i % 4)) -eq 0 ]; then
-            curl -s -o /dev/null "$TARGET_URL" 2>/dev/null
-        elif [ $((i % 4)) -eq 1 ]; then
-            curl -s -o /dev/null -H "X-Test-ID: $i" "$TARGET_URL" 2>/dev/null
-        elif [ $((i % 4)) -eq 2 ]; then
-            curl -s -I -o /dev/null "$TARGET_URL" 2>/dev/null
-        else
-            curl -s -o /dev/null "${TARGET_URL}?test=$i" 2>/dev/null
+# Monitor progress
+(
+    while true; do
+        count=$(cat "$COUNTER_FILE" 2>/dev/null || echo "0")
+        if [ "$count" -ge "$TOTAL_REQUESTS" ]; then
+            printf "\rRequests completed: %d / %d (100.0%%)\n" "$count" "$TOTAL_REQUESTS"
+            break
         fi
-        
-        counter=$((counter + 1))
-        if [ $((counter % 10)) -eq 0 ]; then
-            printf "\rProgress: %d / %d requests" "$counter" "$TOTAL_REQUESTS"
-        fi
-    } &
-    
-    # Limit concurrency
-    if [ $((i % CONCURRENT_JOBS)) -eq 0 ]; then
-        wait
+        printf "\rRequests completed: %d / %d (%.1f%%)" "$count" "$TOTAL_REQUESTS" "$(echo "scale=1; $count * 100 / $TOTAL_REQUESTS" | bc)"
+        sleep 0.2
+    done
+) &
+MONITOR_PID=$!
+
+# Cleanup handler
+on_exit() {
+    echo ""
+    echo "Interrupted. Cleaning up..."
+    pkill -P $$ 2>/dev/null || true
+    if [ -n "${MONITOR_PID:-}" ] && kill -0 "$MONITOR_PID" 2>/dev/null; then
+        kill "$MONITOR_PID" 2>/dev/null || true
     fi
-done
+    final_count=$(cat "$COUNTER_FILE" 2>/dev/null || echo "0")
+    printf "\nFinal requests: %d / %d\n" "$final_count" "$TOTAL_REQUESTS"
+    exit 1
+}
+trap 'on_exit' INT TERM
 
-# Wait for all background jobs to complete
-wait
+# Generate requests
+seq 1 $TOTAL_REQUESTS | xargs -P $CONCURRENT_JOBS -I {} bash -c "make_request {} $TARGET_URL"
 
-# End time
+# Wait for monitor
+wait $MONITOR_PID 2>/dev/null
+
 end_time=$(date +%s)
 duration=$((end_time - start_time))
 
 echo ""
-echo ""
 echo "======================================================================"
-echo "QUICK LOAD TEST COMPLETED"
-echo "======================================================================"
-echo "Total Requests Sent: $TOTAL_REQUESTS"
 echo "Duration: ${duration} seconds"
-if [ "$duration" -gt 0 ]; then
-    echo "Average Rate: $(echo "scale=2; $TOTAL_REQUESTS / $duration" | bc 2>/dev/null || echo "N/A") requests/second"
-fi
+echo "Average Rate: $(echo "scale=2; $TOTAL_REQUESTS / $duration" | bc) req/sec"
 echo ""
-echo "Check your sniffer output for captured HTTP requests!"
+echo "Expected in GUI: ~$TOTAL_REQUESTS packets (400 total: req + resp)"
+echo "Check GUI now and compare Requests + Responses vs $TOTAL_REQUESTS"
 echo "======================================================================"
+
+# Cleanup
+rm -f "$COUNTER_FILE" "${COUNTER_FILE}.lock"

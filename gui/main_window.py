@@ -7,7 +7,7 @@ import queue
 from datetime import datetime
 
 from core import PacketSniffer
-from models import HTTPRequestInfo
+from models import HTTPRequestInfo, HTTPResponseInfo
 from filters import FilterManager, MethodFilter, IPFilter, CompositeFilter
 from config import SnifferConfig
 
@@ -25,7 +25,7 @@ class HTTPSnifferGUI:
     def __init__(self):
         """Initialize the GUI."""
         self.root = tk.Tk()
-        self.root.title("HTTP Packet Sniffer - Phase 7")
+        self.root.title("HTTP Packet Sniffer")
         self.root.geometry("1400x900")
         
         self.queue = queue.Queue(maxsize=5000)  # Large queue to buffer bursts
@@ -34,7 +34,9 @@ class HTTPSnifferGUI:
         self.filter_manager = FilterManager()
         
         self.request_data = {}
+        self.response_data = {}
         self.request_count = 0
+        self.response_count = 0
         
         self.filter_method = tk.StringVar(value="All")
         self.filter_src_ip = tk.StringVar(value="")
@@ -58,7 +60,7 @@ class HTTPSnifferGUI:
         title_frame.pack(fill=tk.X)
         title_frame.pack_propagate(False)
         
-        title_label = tk.Label(title_frame, text="HTTP Packet Sniffer - Phase 7", 
+        title_label = tk.Label(title_frame, text="HTTP Packet Sniffer", 
                               bg='#2c3e50', fg='white', font=('Arial', 18, 'bold'))
         title_label.pack(pady=15)
     
@@ -83,12 +85,14 @@ class HTTPSnifferGUI:
                                        padx=20, pady=8, relief=tk.RAISED, cursor='hand2')
         self.clear_button.pack(side=tk.LEFT, padx=5, pady=8)
         
+        
         self.console_button = tk.Button(control_frame, text="Print to Console", command=self.print_selected_to_console,
                                        bg='#9b59b6', fg='white', font=('Arial', 11, 'bold'),
                                        padx=20, pady=8, relief=tk.RAISED, cursor='hand2')
         self.console_button.pack(side=tk.LEFT, padx=5, pady=8)
         
-        self.stats_label = tk.Label(control_frame, text="Requests: 0 | Total: 0 | Rate: 0/s", 
+        
+        self.stats_label = tk.Label(control_frame, text="Requests: 0 | Responses: 0 | Total: 0 | Rate: 0/s", 
                                     bg='#ecf0f1', font=('Arial', 10, 'bold'))
         self.stats_label.pack(side=tk.RIGHT, padx=10)
     
@@ -141,10 +145,13 @@ class HTTPSnifferGUI:
         notebook = ttk.Notebook(self.root)
         notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        # HTTP Requests tab
+        
         self._create_requests_tab(notebook)
         
-        # Logs tab
+        
+        self._create_responses_tab(notebook)
+        
+        
         self._create_logs_tab(notebook)
     
     def _create_requests_tab(self, notebook):
@@ -186,6 +193,43 @@ class HTTPSnifferGUI:
         
         self.request_tree.bind('<<TreeviewSelect>>', self.on_request_select)
     
+    def _create_responses_tab(self, notebook):
+        """Create responses tab."""
+        resp_frame = tk.Frame(notebook)
+        notebook.add(resp_frame, text='HTTP Responses')
+        
+        resp_tree_frame = tk.Frame(resp_frame)
+        resp_tree_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        self.response_tree = ttk.Treeview(resp_tree_frame,
+                                         columns=('Time', 'Status', 'Source', 'Destination'),
+                                         show='tree headings', height=12)
+        
+        self.response_tree.heading('#0', text='#')
+        self.response_tree.heading('Time', text='Timestamp')
+        self.response_tree.heading('Status', text='Status')
+        self.response_tree.heading('Source', text='Source IP:Port')
+        self.response_tree.heading('Destination', text='Destination IP:Port')
+        
+        self.response_tree.column('#0', width=50)
+        self.response_tree.column('Time', width=150)
+        self.response_tree.column('Status', width=250)
+        self.response_tree.column('Source', width=220)
+        self.response_tree.column('Destination', width=220)
+        
+        resp_scroll = ttk.Scrollbar(resp_tree_frame, orient=tk.VERTICAL, command=self.response_tree.yview)
+        self.response_tree.configure(yscrollcommand=resp_scroll.set)
+        
+        self.response_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        resp_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        tk.Label(resp_frame, text="Response Details:", font=('Arial', 10, 'bold')).pack(anchor=tk.W, padx=5)
+        
+        self.response_detail = scrolledtext.ScrolledText(resp_frame, height=10, font=('Courier', 9))
+        self.response_detail.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        self.response_tree.bind('<<TreeviewSelect>>', self.on_response_select)
+    
     def _create_logs_tab(self, notebook):
         """Create logs tab."""
         log_frame = tk.Frame(notebook)
@@ -204,7 +248,7 @@ class HTTPSnifferGUI:
                                      bg='#34495e', fg='white', font=('Arial', 9))
         self.status_label.pack(side=tk.LEFT, padx=10)
     
-    # Event Handlers
+    
     
     def start_capture(self):
         """Start packet capture."""
@@ -216,7 +260,7 @@ class HTTPSnifferGUI:
         self.start_button.config(state=tk.DISABLED)
         self.stop_button.config(state=tk.NORMAL)
         
-        self.sniffer = PacketSniffer(gui_queue=self.queue, filter_manager=self.filter_manager)
+        self.sniffer = PacketSniffer(gui_queue=self.queue)
         self.sniffer_thread = threading.Thread(target=self.sniffer.capture_packets, daemon=True)
         self.sniffer_thread.start()
     
@@ -228,22 +272,17 @@ class HTTPSnifferGUI:
             self.status_label.config(text="Status: Stopped")
             self.start_button.config(state=tk.NORMAL)
             self.stop_button.config(state=tk.DISABLED)
-            
-            # Display performance statistics
-            if self.sniffer:
-                stats = self.sniffer.get_performance_stats()
-                self.log_message(f"[*] Performance Statistics:")
-                self.log_message(f"    Packets/second: {stats['packets_per_second']:.2f}")
-                self.log_message(f"    Total errors: {stats['total_errors']}")
-                self.log_message(f"    Error rate: {stats['error_rate']:.4f}")
-                self.log_message(f"    Elapsed time: {stats['elapsed_time']:.2f}s")
     
     def clear_displays(self):
         """Clear all displays."""
         self.request_tree.delete(*self.request_tree.get_children())
+        self.response_tree.delete(*self.response_tree.get_children())
         self.request_detail.delete('1.0', tk.END)
+        self.response_detail.delete('1.0', tk.END)
         self.request_data.clear()
+        self.response_data.clear()
         self.request_count = 0
+        self.response_count = 0
         self.update_stats()
         self.log_message("[+] Display cleared")
     
@@ -252,14 +291,14 @@ class HTTPSnifferGUI:
         self.filter_manager.set_enabled(self.filter_enabled.get())
         
         if self.filter_enabled.get():
-            # Create composite filter
+            
             composite = CompositeFilter()
             composite.add_filter(MethodFilter(self.filter_method.get()))
             composite.add_filter(IPFilter(self.filter_src_ip.get(), self.filter_dest_ip.get()))
             
             self.filter_manager.set_filter(composite)
             
-            # Update status
+            
             method = self.filter_method.get()
             src_ip = self.filter_src_ip.get().strip()
             dest_ip = self.filter_dest_ip.get().strip()
@@ -292,25 +331,39 @@ class HTTPSnifferGUI:
     def refresh_filtered_display(self):
         """Refresh display with current filters."""
         all_request_data = dict(self.request_data)
+        all_response_data = dict(self.response_data)
         
         self.request_tree.delete(*self.request_tree.get_children())
+        self.response_tree.delete(*self.response_tree.get_children())
         self.request_data.clear()
+        self.response_data.clear()
         
         req_count = 0
         for item_id, packet_info in all_request_data.items():
             if self.filter_manager.matches(packet_info, 'request'):
                 req_count += 1
                 timestamp = packet_info.timestamp.strftime('%H:%M:%S.%f')[:-3]
-                max_url = getattr(SnifferConfig, 'MAX_URL_DISPLAY_LENGTH', 100)
                 new_item = self.request_tree.insert('', tk.END, text=str(req_count),
                                                    values=(timestamp,
                                                           packet_info.http_method,
-                                                          packet_info.http_uri[:max_url],
+                                                          packet_info.http_uri[:SnifferConfig.MAX_URL_DISPLAY_LENGTH],
                                                           f"{packet_info.src_ip}:{packet_info.src_port}",
                                                           f"{packet_info.dest_ip}:{packet_info.dest_port}"))
                 self.request_data[new_item] = packet_info
         
-        self.log_message(f"[*] Filtered: {req_count} requests")
+        resp_count = 0
+        for item_id, packet_info in all_response_data.items():
+            if self.filter_manager.matches(packet_info, 'response'):
+                resp_count += 1
+                timestamp = packet_info.timestamp.strftime('%H:%M:%S.%f')[:-3]
+                status = packet_info.get_status_line()
+                new_item = self.response_tree.insert('', tk.END, text=str(resp_count),
+                                                    values=(timestamp, status,
+                                                           f"{packet_info.src_ip}:{packet_info.src_port}",
+                                                           f"{packet_info.dest_ip}:{packet_info.dest_port}"))
+                self.response_data[new_item] = packet_info
+        
+        self.log_message(f"[*] Filtered: {req_count} requests, {resp_count} responses")
     
     def log_message(self, message: str):
         """Add log message to log text widget."""
@@ -320,9 +373,9 @@ class HTTPSnifferGUI:
     
     def update_stats(self):
         """Update statistics display with performance metrics."""
-        total = self.request_count
+        total = self.request_count + self.response_count
         
-        # Get rate from sniffer if available
+        
         rate_str = "0/s"
         if self.sniffer:
             try:
@@ -333,7 +386,8 @@ class HTTPSnifferGUI:
                 pass
         
         self.stats_label.config(
-            text=f"Requests: {self.request_count} | Total: {total} | Rate: {rate_str}"
+            text=f"Requests: {self.request_count} | Responses: {self.response_count} | "
+                 f"Total: {total} | Rate: {rate_str}"
         )
     
     def on_request_select(self, event):
@@ -344,17 +398,25 @@ class HTTPSnifferGUI:
             if item in self.request_data:
                 self.display_request_details(self.request_data[item])
     
+    def on_response_select(self, event):
+        """Handle response selection."""
+        selection = self.response_tree.selection()
+        if selection:
+            item = selection[0]
+            if item in self.response_data:
+                self.display_response_details(self.response_data[item])
+    
     def display_request_details(self, packet_info: HTTPRequestInfo):
         """Display request details."""
         self.request_detail.delete('1.0', tk.END)
         
         details = f"HTTP Request Details\n{'='*60}\n\n"
         
-        # Request Line
+        
         details += "Request Line:\n"
         details += f"  {packet_info.http_method} {packet_info.http_uri} {packet_info.http_version}\n\n"
         
-        # Timestamp
+        
         details += f"Timestamp: {packet_info.timestamp.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}\n\n"
         
         details += "Network Information:\n"
@@ -363,20 +425,20 @@ class HTTPSnifferGUI:
         details += f"  Source IP:Port:    {packet_info.src_ip}:{packet_info.src_port}\n"
         details += f"  Destination IP:Port: {packet_info.dest_ip}:{packet_info.dest_port}\n\n"
         
-        # TCP Metadata
+        
         details += "TCP Metadata:\n"
         details += f"  Sequence Number:   {packet_info.sequence}\n"
         details += f"  Acknowledgment:    {packet_info.acknowledgment}\n"
         details += f"  Flags:             {packet_info.get_tcp_flags()}\n\n"
         
-        # HTTP Headers
+        
         if packet_info.http_headers:
             details += f"HTTP Headers: ({len(packet_info.http_headers)} headers)\n"
             for key, value in sorted(packet_info.http_headers.items()):
                 details += f"  {key}: {value}\n"
             details += "\n"
         
-        # Request Body
+        
         if packet_info.http_body:
             details += "Request Body/Payload:\n"
             details += f"{'-'*60}\n"
@@ -387,8 +449,44 @@ class HTTPSnifferGUI:
         
         self.request_detail.insert('1.0', details)
     
+    def display_response_details(self, packet_info: HTTPResponseInfo):
+        """Display response details."""
+        self.response_detail.delete('1.0', tk.END)
+        
+        details = f"HTTP Response Details\n{'='*60}\n\n"
+        
+        
+        details += "Status Line:\n"
+        details += f"  {packet_info.http_version} {packet_info.get_status_line()}\n\n"
+        
+        
+        details += f"Timestamp: {packet_info.timestamp.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}\n\n"
+        
+        details += "Network Information:\n"
+        details += f"  Source IP:Port:    {packet_info.src_ip}:{packet_info.src_port}\n"
+        details += f"  Destination IP:Port: {packet_info.dest_ip}:{packet_info.dest_port}\n\n"
+        
+        
+        if packet_info.http_headers:
+            details += f"HTTP Headers: ({len(packet_info.http_headers)} headers)\n"
+            for key, value in sorted(packet_info.http_headers.items()):
+                details += f"  {key}: {value}\n"
+            details += "\n"
+        
+        
+        if packet_info.http_body:
+            details += "Response Body:\n"
+            details += f"{'-'*60}\n"
+            details += f"{packet_info.http_body}\n"
+            details += f"{'-'*60}\n"
+        else:
+            details += "Response Body: (empty or not captured)\n"
+        
+        self.response_detail.insert('1.0', details)
+    
     def print_selected_to_console(self):
         """Print selected packet details to console."""
+        
         request_selection = self.request_tree.selection()
         if request_selection:
             item = request_selection[0]
@@ -398,8 +496,18 @@ class HTTPSnifferGUI:
                 self.log_message("[*] Request details printed to console")
                 return
         
-        # No selection
-        self.log_message("[!] No packet selected. Please select a request first.")
+        
+        response_selection = self.response_tree.selection()
+        if response_selection:
+            item = response_selection[0]
+            if item in self.response_data:
+                packet_info = self.response_data[item]
+                packet_info.print_console_details()
+                self.log_message("[*] Response details printed to console")
+                return
+        
+        
+        self.log_message("[!] No packet selected. Please select a request or response first.")
     
     def _process_queue(self):
         """Process messages from queue (batch processing for performance)."""
@@ -414,14 +522,14 @@ class HTTPSnifferGUI:
                     self.log_message(data)
                 elif msg_type == 'request':
                     self.add_request(data)
+                elif msg_type == 'response':
+                    self.add_response(data)
                 
                 batch_count += 1
         except queue.Empty:
             pass
         
-        # Schedule next queue processing
-        update_interval = getattr(SnifferConfig, 'GUI_UPDATE_INTERVAL_MS', 100)
-        self.root.after(update_interval, self._process_queue)
+        self.root.after(SnifferConfig.GUI_UPDATE_INTERVAL_MS, self._process_queue)
     
     def add_request(self, packet_info: HTTPRequestInfo):
         """Add request to tree view."""
@@ -430,18 +538,35 @@ class HTTPSnifferGUI:
         
         self.request_count += 1
         timestamp = packet_info.timestamp.strftime('%H:%M:%S.%f')[:-3]
-        max_url = getattr(SnifferConfig, 'MAX_URL_DISPLAY_LENGTH', 100)
         
         item = self.request_tree.insert('', tk.END, text=str(self.request_count),
                                        values=(timestamp,
                                               packet_info.http_method,
-                                              packet_info.http_uri[:max_url],
+                                              packet_info.http_uri[:SnifferConfig.MAX_URL_DISPLAY_LENGTH],
                                               f"{packet_info.src_ip}:{packet_info.src_port}",
                                               f"{packet_info.dest_ip}:{packet_info.dest_port}"))
         
         self.request_data[item] = packet_info
         self.update_stats()
         self.request_tree.see(item)
+    
+    def add_response(self, packet_info: HTTPResponseInfo):
+        """Add response to tree view."""
+        if not self.filter_manager.matches(packet_info, 'response'):
+            return
+        
+        self.response_count += 1
+        timestamp = packet_info.timestamp.strftime('%H:%M:%S.%f')[:-3]
+        status = packet_info.get_status_line()
+        
+        item = self.response_tree.insert('', tk.END, text=str(self.response_count),
+                                        values=(timestamp, status,
+                                               f"{packet_info.src_ip}:{packet_info.src_port}",
+                                               f"{packet_info.dest_ip}:{packet_info.dest_port}"))
+        
+        self.response_data[item] = packet_info
+        self.update_stats()
+        self.response_tree.see(item)
     
     def run(self):
         """Run the GUI main loop."""
